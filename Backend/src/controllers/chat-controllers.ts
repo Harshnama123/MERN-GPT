@@ -26,6 +26,10 @@ const MODEL_NAMES = [
   "gemini-1.0-pro"     // Last resort
 ];
 
+// Cache for working model
+let cachedModel: GenerativeModel | null = null;
+let currentModelName: string = '';
+
 // Test function to check model availability
 async function testModel(modelName: string): Promise<GenerativeModel | null> {
   try {
@@ -40,13 +44,27 @@ async function testModel(modelName: string): Promise<GenerativeModel | null> {
   }
 }
 
-// Get working model with fallback
+// Get working model with caching
 async function getWorkingModel(): Promise<GenerativeModel> {
+  if (cachedModel) {
+    return cachedModel;
+  }
+
   for (const modelName of MODEL_NAMES) {
     const model = await testModel(modelName);
-    if (model) return model;
+    if (model) {
+      cachedModel = model;
+      currentModelName = modelName;
+      return model;
+    }
   }
   throw new Error("No available Gemini models found");
+}
+
+// Reset cached model if needed
+function resetModelCache() {
+  cachedModel = null;
+  currentModelName = '';
 }
 
 /**
@@ -58,11 +76,14 @@ export const testGeminiConnection = async (
   next: NextFunction
 ) => {
   try {
+    // Force test without cache
+    resetModelCache();
     const model = await getWorkingModel();
     const result = await model.generateContent("Test response: Hello!");
+    
     return res.status(200).json({
       message: "Gemini API is working",
-      modelName: model.model,
+      modelName: currentModelName,
       testResponse: result.response.text()
     });
   } catch (error: any) {
@@ -96,26 +117,25 @@ export const generateChatCompletion = async (
 
     // Save user message
     user.chats.push({ role: "user", content: message });
-    await user.save();
 
     try {
-      // Get a working model with fallback
-      console.log("🔄 Getting available Gemini model...");
+      // Get a working model (uses cache after first call)
+      console.log("🔄 Getting Gemini model...");
       const model = await getWorkingModel();
-      console.log(`✨ Using model: ${model.model}`);
+      console.log(`✨ Using model: ${currentModelName}`);
 
-      // Build conversation context - get recent chat history
-      const recentChats = user.chats.slice(-10); // Get last 10 messages for better context
+      // Build conversation context - get recent chat history (excluding current message)
+      const chatHistory = user.chats.slice(0, -1).slice(-9); // Last 9 previous messages + current = 10 total
       
-      // Format chat history for Gemini (excluding the current message since we'll send it separately)
-      const chatHistory = recentChats.slice(0, -1).map(chat => ({
+      // Format chat history for Gemini
+      const formattedHistory = chatHistory.map(chat => ({
         role: chat.role === "user" ? "user" : "model",
         parts: [{ text: chat.content }]
       }));
 
       // Start chat with history
       const chat = model.startChat({
-        history: chatHistory,
+        history: formattedHistory,
         generationConfig: {
           temperature: 0.9,
           topK: 40,
@@ -149,6 +169,11 @@ export const generateChatCompletion = async (
       await user.save();
 
       console.error("AI Error:", aiError);
+      
+      // If it's a model-related error, reset cache
+      if (aiError.message?.includes('model') || aiError.message?.includes('quota')) {
+        resetModelCache();
+      }
       
       return res.status(500).json({
         message: "Failed to get AI response",
@@ -217,7 +242,8 @@ export const deleteChats = async (
     }
 
     // Clear chats
-    user.chats.splice(0, user.chats.length);
+    //@ts-ignore
+    user.chats = [];
     await user.save();
 
     return res.status(200).json({ 

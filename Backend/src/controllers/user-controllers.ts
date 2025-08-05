@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import User from "../models/User.js";
 import { hash, compare } from "bcryptjs";
 import { createToken } from "../utils/token-manager.js";
-import { COOKIE_NAME } from "../utils/constants.js";
+import { COOKIE_NAME, isProduction } from "../utils/constants.js";
 
 export const getAllUsers = async (
   req: Request,
@@ -34,22 +34,25 @@ export const userSignup = async (
     await user.save();
 
     // create token and store cookie
+    // Clear any existing cookies with appropriate settings
     res.clearCookie(COOKIE_NAME, {
       httpOnly: true,
-      domain: "localhost",
       signed: true,
       path: "/",
+      ...(isProduction && { sameSite: "none", secure: true }),
     });
 
     const token = createToken(user._id.toString(), user.email, "7d");
     const expires = new Date();
     expires.setDate(expires.getDate() + 7);
+    
+    // Set cookie with environment-specific settings
     res.cookie(COOKIE_NAME, token, {
       path: "/",
-      domain: "localhost",
       expires,
       httpOnly: true,
       signed: true,
+      ...(isProduction && { sameSite: "none", secure: true }),
     });
 
     return res
@@ -80,22 +83,25 @@ export const userLogin = async (
 
     // create token and store cookie
 
+    // Clear any existing cookies with appropriate settings
     res.clearCookie(COOKIE_NAME, {
       httpOnly: true,
-      domain: "localhost",
       signed: true,
       path: "/",
+      ...(isProduction && { sameSite: "none", secure: true }),
     });
 
     const token = createToken(user._id.toString(), user.email, "7d");
     const expires = new Date();
     expires.setDate(expires.getDate() + 7);
+    
+    // Set cookie with environment-specific settings
     res.cookie(COOKIE_NAME, token, {
       path: "/",
-      domain: "localhost",
       expires,
       httpOnly: true,
       signed: true,
+      ...(isProduction && { sameSite: "none", secure: true }),
     });
 
     return res
@@ -147,9 +153,9 @@ export const userLogout = async (
 
     res.clearCookie(COOKIE_NAME, {
       httpOnly: true,
-      domain: "localhost",
       signed: true,
       path: "/",
+      ...(isProduction && { sameSite: "none", secure: true }),
     });
 
     return res

@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 // Create Axios instance with backend base URL
 const API = axios.create({
@@ -6,22 +6,58 @@ const API = axios.create({
   withCredentials: true, // Important for cookies/session
 });
 
+// Custom error type for API errors
+type ApiError = {
+  message: string;
+  cause?: string;
+};
+
 export const loginUser = async (email: string, password: string) => {
-  const res = await API.post("/user/login", { email, password });
-  if (res.status !== 200) throw new Error("Unable to login");
-  return res.data;
+  try {
+    const res = await API.post("/user/login", { email, password });
+    if (res.status !== 200) {
+      throw new Error(res.data?.message || "Unable to login");
+    }
+    return res.data;
+  } catch (err) {
+    const error = err as AxiosError<ApiError>;
+    console.error("Login error:", error);
+    throw new Error(
+      error.response?.data?.message || error.message || "Unable to login"
+    );
+  }
 };
 
 export const signupUser = async (name: string, email: string, password: string) => {
-  const res = await API.post("/user/signup", { name, email, password });
-  if (res.status !== 201) throw new Error("Unable to signup");
-  return res.data;
+  try {
+    const res = await API.post("/user/signup", { name, email, password });
+    if (res.status !== 201) {
+      throw new Error(res.data?.message || "Unable to signup");
+    }
+    return res.data;
+  } catch (err) {
+    const error = err as AxiosError<ApiError>;
+    console.error("Signup error:", error);
+    throw new Error(
+      error.response?.data?.message || error.message || "Unable to signup"
+    );
+  }
 };
 
 export const checkAuthStatus = async () => {
-  const res = await API.get("/user/auth-status");
-  if (res.status !== 200) throw new Error("Unable to authenticate");
-  return res.data;
+  try {
+    const res = await API.get("/user/auth-status");
+    if (res.status !== 200) {
+      throw new Error(res.data?.message || "Unable to authenticate");
+    }
+    return res.data;
+  } catch (err) {
+    const error = err as AxiosError<ApiError>;
+    console.error("Auth check error:", error);
+    throw new Error(
+      error.response?.data?.message || error.message || "Unable to authenticate"
+    );
+  }
 };
 
 export const sendChatRequest = async (message: string) => {
